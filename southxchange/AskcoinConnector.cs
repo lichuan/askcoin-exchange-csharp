@@ -23,8 +23,6 @@ namespace Askcoin
 
         // change to your own exchange account privkey
         string m_exchange_account_privkey = "NdwJnIHm9oU+IPu7qPr/DcbgbVLd4Sf2trGgxHm1qxw=";
-        string m_last_deposit_batchId;
-        string m_last_withdraw_batchId;
 
         public void SetApi(IConnectorApi connectorApi)
         {
@@ -41,7 +39,7 @@ namespace Askcoin
         /// </summary>
         /// <returns>Batch ID of the previous call, or null on the first time</returns>
         public DepositList ListDeposits(string batchId)
-        {
+        {          
             ulong block_id;
             bool result = ulong.TryParse(batchId, out block_id);
             if(!result)
@@ -55,15 +53,15 @@ namespace Askcoin
             obj.Add("msg_id", ++m_cur_msg_id);
             obj.Add("required_confirms", m_required_confirms);
             obj.Add("block_id", block_id);
-          
+
+            DepositList dlist = new DepositList();
+            dlist.Deposits = new List<Deposit>();            
+
             string obj_str = JsonConvert.SerializeObject(obj);
             byte[] arr = System.Text.Encoding.Default.GetBytes(obj_str);
             var send_task = m_wsock.SendAsync(new ArraySegment<byte>(arr), WebSocketMessageType.Text, true, m_cancel_token);
             send_task.Wait();
-            DepositList dlist = new DepositList();
-            dlist.Deposits = new List<Deposit>();
-            dlist.BatchId = m_last_deposit_batchId;
-            m_last_deposit_batchId = batchId;
+            
 
             while (true)
             {
@@ -79,9 +77,12 @@ namespace Askcoin
 
                 if (recv_msg_id == m_cur_msg_id)
                 {
-                    var deposits_json = recv_obj["deposits"];                   
+                    var deposits_json = recv_obj["deposits"];
+                    dlist.BatchId = (string)recv_obj["batchId"];
 
-                    foreach(var dobj in deposits_json)
+                    Console.WriteLine("batchId: {0}", dlist.BatchId);
+
+                    foreach (var dobj in deposits_json)
                     {
                         JObject deposit_obj = (JObject)dobj;
                         //Console.WriteLine(deposit_obj);
@@ -123,14 +124,14 @@ namespace Askcoin
             obj.Add("required_confirms", m_required_confirms);
             obj.Add("block_id", block_id);
 
+            WithdrawList wlist = new WithdrawList();
+            wlist.Withdraws = new List<Withdraw>();            
+
             string obj_str = JsonConvert.SerializeObject(obj);
             byte[] arr = System.Text.Encoding.Default.GetBytes(obj_str);
             var send_task = m_wsock.SendAsync(new ArraySegment<byte>(arr), WebSocketMessageType.Text, true, m_cancel_token);
             send_task.Wait();
-            WithdrawList wlist = new WithdrawList();
-            wlist.Withdraws = new List<Withdraw>();
-            wlist.BatchId = m_last_withdraw_batchId;
-            m_last_withdraw_batchId = batchId;
+            
 
             while (true)
             {
@@ -147,6 +148,7 @@ namespace Askcoin
                 if (recv_msg_id == m_cur_msg_id)
                 {
                     var withdraws_json = recv_obj["withdraws"];
+                    wlist.BatchId = (string)recv_obj["batchId"];
 
                     foreach (var wobj in withdraws_json)
                     {
@@ -719,6 +721,8 @@ namespace Askcoin
             }           
            
             Console.WriteLine("askcoin connector started.");
+
+            DepositList dl = ListDeposits("234");
 
             //string txid = SendTo("12", 100);
             //Console.WriteLine("txid: {0}", txid);
